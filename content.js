@@ -34,35 +34,15 @@ document.addEventListener('mousedown', (e) => {
 });
 
 function highlightRange(range) {
-    // Extract all the individual text nodes the range touches
-    const fragment = range.cloneContents();
-    const treeWalker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
-    
-    const textNodes = [];
-    let node;
-    while ((node = treeWalker.nextNode())) {
-        textNodes.push(node);
-    }
-
-    // If surroundContents is safe (single element), use it directly
-    if (textNodes.length <= 1) {
-        const highlight = document.createElement('mark');
-        highlight.className = 'ts-ext-highlight';
-        try {
-            range.surroundContents(highlight);
-        } catch (e) {
-            console.warn('surroundContents failed:', e.message);
-        }
-        return;
-    }
-
-    // Otherwise, wrap each text node in the live DOM individually
     const living = [];
     const rangeWalker = document.createTreeWalker(
-        range.commonAncestorContainer,
+        range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+            ? range.commonAncestorContainer.parentNode  // walk from parent if it's a text node
+            : range.commonAncestorContainer,
         NodeFilter.SHOW_TEXT
     );
 
+    let node;
     while ((node = rangeWalker.nextNode())) {
         if (range.intersectsNode(node)) {
             living.push(node);
@@ -73,7 +53,6 @@ function highlightRange(range) {
         const nodeRange = document.createRange();
         nodeRange.selectNodeContents(textNode);
 
-        // Clamp the range to only the selected portion
         if (textNode === range.startContainer) {
             nodeRange.setStart(textNode, range.startOffset);
         }
