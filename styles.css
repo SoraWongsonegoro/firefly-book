@@ -17,3 +17,10 @@
 .ts-ext-save-btn:hover {
     background: #0056b3;
 }
+
+.generic-highlight {
+  background-color: #ffff00;
+  color: #000000;
+  border-radius: 3px;
+  padding: 0 2px;
+}
