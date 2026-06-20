@@ -33,6 +33,21 @@ document.addEventListener('mousedown', (e) => {
 // Save Logic
 popupBtn.addEventListener('click', () => {
     const selectedText = window.getSelection().toString().trim();
+
+    const selection = window.getSelection();
+    if (!selection.isCollapsed) {
+        const range = selection.getRangeAt(0);
+    
+        // Create a new span element with our highlight class
+        const span = document.createElement('span');
+        span.className = 'generic-highlight';
+    
+        // Wrap the selected content
+        range.surroundContents(span);
+    
+        // Clear selection so it doesn't stay highlighted natively
+        selection.removeAllRanges();
+    }
     
     if (selectedText) {
         // 1. Fetch current snippets from storage
