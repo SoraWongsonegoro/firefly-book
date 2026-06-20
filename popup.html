@@ -3,60 +3,266 @@
 <head>
     <meta charset="utf-8">
     <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            width: 300px;
-            margin: 0;
-            padding: 15px;
+            width: 600px;
+            height: 600px;
             font-family: sans-serif;
             background: #f9f9f9;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
-        h3 {
-            margin-top: 0;
-            text-align: center;
-            color: #333;
+
+        /* --- Tab Bar --- */
+        #tab-bar {
+            display: flex;
+            background: #2c2c2c;
+            padding: 0 10px;
+            flex-shrink: 0;
         }
+        .tab {
+            padding: 12px 20px;
+            color: #aaa;
+            cursor: pointer;
+            font-size: 13px;
+            border-bottom: 3px solid transparent;
+            transition: color 0.2s, border-color 0.2s;
+            user-select: none;
+        }
+        .tab:hover { color: #fff; }
+        .tab.active {
+            color: #fff;
+            border-bottom: 3px solid #007bff;
+        }
+
+        /* --- Pages --- */
+        #page-container {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+        .page {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            padding: 14px;
+            overflow-y: auto;
+        }
+        .page.active { display: flex; }
+
+        /* --- Toolbar row (search + add collection) --- */
+        .toolbar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            flex-shrink: 0;
+        }
+        .toolbar input {
+            flex: 1;
+            padding: 7px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .toolbar button {
+            padding: 7px 12px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+        .toolbar button:hover { background: #0056b3; }
+
+        /* --- Clear button --- */
         #clear-btn {
             width: 100%;
-            padding: 8px;
+            padding: 7px;
             background: #dc3545;
             color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
-            margin-bottom: 10px;
-        }
-        #clear-btn:hover {
-            background: #c82333;
-        }
-        ul {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            max-height: 350px;
-            overflow-y: auto;
-        }
-        li {
-            padding: 10px;
-            border-bottom: 1px solid #eee;
             font-size: 13px;
-            background: white;
-            margin-bottom: 5px;
+            margin-bottom: 12px;
+            flex-shrink: 0;
+        }
+        #clear-btn:hover { background: #c82333; }
+
+        /* --- Section headers --- */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #e9ecef;
+            padding: 7px 10px;
             border-radius: 4px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-            word-wrap: break-word;
+            font-weight: bold;
+            font-size: 13px;
+            color: #333;
+            margin-bottom: 4px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .section-header:hover { background: #dee2e6; }
+        .section-header .chevron { font-size: 11px; color: #666; }
+        .delete-btn {
+            background: none;
+            border: none;
+            color: #dc3545;
+            cursor: pointer;
+            font-size: 12px;
+            padding: 0 0 0 8px;
+        }
+        .delete-btn:hover { color: #a71d2a; }
+
+        /* --- Snippet cards --- */
+        .snippet-list { margin-bottom: 10px; }
+        .snippet-card {
+            background: white;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+            padding: 9px 10px;
+            margin-bottom: 5px;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        .snippet-body { flex: 1; min-width: 0; }
+        .snippet-text { word-wrap: break-word; color: #222; }
+        .snippet-source {
+            display: block;
+            font-size: 11px;
+            color: #007bff;
+            margin-top: 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 350px;
+            text-decoration: none;
+        }
+        .snippet-source:hover { text-decoration: underline; }
+        .snippet-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 90px;
+        }
+        .move-select {
+            font-size: 11px;
+            padding: 2px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            width: 100%;
+        }
+        .move-btn {
+            font-size: 11px;
+            padding: 3px 6px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            width: 100%;
+        }
+        .move-btn:hover { background: #0056b3; }
+
+        /* --- Collection page --- */
+        .collection-card {
+            background: white;
+            border-radius: 6px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            padding: 12px 14px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+            transition: box-shadow 0.15s;
+        }
+        .collection-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.13); }
+        .collection-card .count {
+            font-size: 12px;
+            font-weight: normal;
+            color: #888;
+        }
+
+        /* --- Collection detail (back button + snippets) --- */
+        #back-btn {
+            background: none;
+            border: none;
+            color: #007bff;
+            cursor: pointer;
+            font-size: 13px;
+            margin-bottom: 10px;
+            padding: 0;
+            flex-shrink: 0;
+        }
+        #back-btn:hover { text-decoration: underline; }
+        #collection-detail-title {
+            font-size: 15px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+            flex-shrink: 0;
+        }
+
+        .empty-msg {
+            font-size: 13px;
+            color: #888;
+            padding: 6px 0;
         }
     </style>
 </head>
 <body>
-    <h3>Saved Snippets</h3>
 
-    <div id="new-collection-row">
-        <input id="new-collection-input" type="text" placeholder="New collection name..." />
-        <button id="new-collection-btn">+ Add</button>
+    <!-- Tab Bar -->
+    <div id="tab-bar">
+        <div class="tab active" data-tab="all">All Quotes</div>
+        <div class="tab" data-tab="by-site">By Website</div>
+        <div class="tab" data-tab="collections">Collections</div>
     </div>
 
-    <button id="clear-btn">Clear All</button>
-    <div id="collections-container"></div>
+    <!-- Page Container -->
+    <div id="page-container">
+
+        <!-- All Quotes -->
+        <div class="page active" id="page-all">
+            <button id="clear-btn">Clear All</button>
+            <div id="all-quotes-list"></div>
+        </div>
+
+        <!-- By Website -->
+        <div class="page" id="page-by-site">
+            <div id="by-site-list"></div>
+        </div>
+
+        <!-- Collections -->
+        <div class="page" id="page-collections">
+            <div class="toolbar">
+                <input id="new-collection-input" type="text" placeholder="New collection name..." />
+                <button id="new-collection-btn">+ Add</button>
+            </div>
+            <div id="collections-list"></div>
+
+            <!-- Collection Detail (hidden until a collection is clicked) -->
+            <div id="collection-detail" style="display:none; flex-direction:column; height:100%;">
+                <button id="back-btn">← Back</button>
+                <div id="collection-detail-title"></div>
+                <div id="collection-detail-list"></div>
+            </div>
+        </div>
+
+    </div>
 
     <script src="popup.js"></script>
 </body>
