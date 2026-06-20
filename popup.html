@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <style>
         body {
-            width: 320px;
+            width: 300px;
             margin: 0;
             padding: 15px;
             font-family: sans-serif;
@@ -15,28 +15,6 @@
             text-align: center;
             color: #333;
         }
-        #new-collection-row {
-            display: flex;
-            gap: 6px;
-            margin-bottom: 10px;
-        }
-        #new-collection-input {
-            flex: 1;
-            padding: 6px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 13px;
-        }
-        #new-collection-btn {
-            padding: 6px 10px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 13px;
-        }
-        #new-collection-btn:hover { background: #0056b3; }
         #clear-btn {
             width: 100%;
             padding: 8px;
@@ -47,78 +25,25 @@
             cursor: pointer;
             margin-bottom: 10px;
         }
-        #clear-btn:hover { background: #c82333; }
-        .collection-block {
-            margin-bottom: 12px;
+        #clear-btn:hover {
+            background: #c82333;
         }
-        .collection-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: #e9ecef;
-            padding: 6px 10px;
-            border-radius: 4px;
-            font-weight: bold;
-            font-size: 13px;
-            color: #333;
-            margin-bottom: 4px;
-        }
-        .delete-collection-btn {
-            background: none;
-            border: none;
-            color: #dc3545;
-            cursor: pointer;
-            font-size: 12px;
-            padding: 0;
-        }
-        .delete-collection-btn:hover { color: #a71d2a; }
         ul {
             list-style: none;
             padding: 0;
             margin: 0;
+            max-height: 350px;
+            overflow-y: auto;
         }
         li {
-            padding: 8px 10px;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
             font-size: 13px;
             background: white;
-            margin-bottom: 4px;
+            margin-bottom: 5px;
             border-radius: 4px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
             word-wrap: break-word;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 6px;
-        }
-        .snippet-text { flex: 1; }
-        .snippet-controls {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            min-width: 85px;
-        }
-        .move-select {
-            font-size: 11px;
-            padding: 2px;
-            border: 1px solid #ccc;
-            border-radius: 3px;
-            width: 100%;
-        }
-        .move-btn {
-            font-size: 11px;
-            padding: 2px 6px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-            width: 100%;
-        }
-        .move-btn:hover { background: #0056b3; }
-        .empty-msg {
-            font-size: 13px;
-            color: #888;
-            padding: 6px 10px;
         }
     </style>
 </head>
