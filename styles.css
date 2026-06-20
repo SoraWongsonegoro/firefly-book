@@ -18,9 +18,8 @@
     background: #0056b3;
 }
 
-.generic-highlight {
-  background-color: #ffff00;
-  color: #000000;
-  border-radius: 3px;
-  padding: 0 2px;
+.ts-ext-highlight {
+    background-color: #f2ff66;
+    color: inherit;
+    border-radius: 2px;
 }
