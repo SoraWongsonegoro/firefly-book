@@ -41,21 +41,20 @@ function renderAllQuotes() {
     container.innerHTML = '';
     const collectionNames = Object.keys(allCollections);
 
-    // Merge unsorted and all collection snippets
-    const collectionSnippets = collectionNames.flatMap(name => allCollections[name]);
-    const allQuotes = [...allSnippets, ...collectionSnippets];
+    const allQuotes = [
+        ...allSnippets.map((snippet, index) => ({ snippet, index, context: 'unsorted', fromCollection: null })),
+        ...collectionNames.flatMap(name =>
+            allCollections[name].map((snippet, index) => ({ snippet, index, context: 'collection', fromCollection: name }))
+        )
+    ];
 
     if (allQuotes.length === 0) {
         container.innerHTML = '<p class="empty-msg">No saved quotes yet.</p>';
         return;
     }
 
-    allSnippets.forEach((snippet, index) => {
-        container.appendChild(makeSnippetCard(snippet, index, 'unsorted', null));
-    });
-    collectionSnippets.forEach((snippet, collectionName) => {
-        const name = collectionNames.find(n => allCollections[n].includes(snippet));
-        container.appendChild(makeSnippetCard(snippet, null, 'collection', name));
+    allQuotes.forEach(({ snippet, index, context, fromCollection }) => {
+        container.appendChild(makeSnippetCard(snippet, index, context, fromCollection));
     });
 }
 
@@ -65,26 +64,32 @@ function renderBySite() {
     const container = document.getElementById('by-site-list');
     container.innerHTML = '';
 
-    if (allSnippets.length === 0) {
+    const collectionNames = Object.keys(allCollections);
+
+    const allQuotes = [
+        ...allSnippets.map((snippet, index) => ({ snippet, index, context: 'unsorted', fromCollection: null })),
+        ...collectionNames.flatMap(name =>
+            allCollections[name].map((snippet, index) => ({ snippet, index, context: 'collection', fromCollection: name }))
+        )
+    ];
+
+    if (allQuotes.length === 0) {
         container.innerHTML = '<p class="empty-msg">No saved quotes yet.</p>';
         return;
     }
 
     // Group by hostname
     const groups = {};
-    allSnippets.forEach((snippet, index) => {
-        const url = typeof snippet === 'object' ? snippet.url : null;
+    allQuotes.forEach((item) => {
+        const url = typeof item.snippet === 'object' ? item.snippet.url : null;
         const host = url ? new URL(url).hostname : 'Unknown site';
         if (!groups[host]) groups[host] = [];
-        groups[host].push({ snippet, index });
+        groups[host].push(item);
     });
 
-    const collectionNames = Object.keys(allCollections);
-
     Object.entries(groups).forEach(([host, items]) => {
-        const isExpanded = expandedSections[host] !== false; // default expanded
+        const isExpanded = expandedSections[host] !== false;
 
-        // Section header
         const header = document.createElement('div');
         header.className = 'section-header';
         header.innerHTML = `
@@ -102,14 +107,15 @@ function renderBySite() {
             header.querySelector('.chevron').textContent = list.style.display === 'none' ? '▼' : '▲';
         });
 
-        items.forEach(({ snippet, index }) => {
-            list.appendChild(makeSnippetCard(snippet, index, 'unsorted', null));
+        items.forEach(({ snippet, index, context, fromCollection }) => {
+            list.appendChild(makeSnippetCard(snippet, index, context, fromCollection));
         });
 
         container.appendChild(header);
         container.appendChild(list);
     });
 }
+
 
 // --- Collections page ---
 
@@ -160,7 +166,7 @@ function openCollectionDetail(name) {
         return;
     }
 
-    snippets.forEach((snippet) => {
+    snippets.forEach((snippet, index) => {
         detailList.appendChild(makeSnippetCard(snippet, index, 'collection', name));
     });
 }
