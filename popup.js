@@ -11,6 +11,8 @@ let currentPageType = 'none';
 let currentPageMeta = null;
 let currentQuoteModalSnippet = null;
 const pageSize = 20;
+let selectionMode = false;
+let selectedItems = new Set(); // stores unique keys: "snippet:INDEX" or "collection:NAME:INDEX"
 
 // --- Init ---
 
@@ -209,6 +211,199 @@ function renderCollectionDetailList(name, items) {
     updatePager();
 }
 
+function getItemKey(snippet, index, fromCollection) {
+    return fromCollection ? `col:${fromCollection}:${index}` : `snip:${index}`;
+}
+
+function enterSelectionMode() {
+    selectionMode = true;
+    selectedItems.clear();
+    const btn = document.getElementById('select-mode-btn');
+    if (btn) { btn.textContent = '✓ Selecting'; btn.style.background = '#c21b1b'; btn.style.color = '#fff'; }
+    renderCurrentTab();
+    updateHotbar();
+}
+
+function exitSelectionMode() {
+    selectionMode = false;
+    selectedItems.clear();
+    const btn = document.getElementById('select-mode-btn');
+    if (btn) { btn.textContent = 'Select'; btn.style.background = ''; btn.style.color = ''; }
+    const hotbar = document.getElementById('selection-hotbar');
+    if (hotbar) hotbar.style.display = 'none';
+    renderCurrentTab();
+}
+
+function updateHotbar() {
+    const hotbar = document.getElementById('selection-hotbar');
+    const countEl = document.getElementById('hotbar-count');
+    if (!hotbar || !countEl) return;
+    const n = selectedItems.size;
+    if (!selectionMode) { hotbar.style.display = 'none'; return; }
+    hotbar.style.display = 'flex';
+    countEl.textContent = `${n} selected`;
+
+    const selectAllBtn = document.getElementById('hotbar-select-all');
+    if (selectAllBtn) {
+        const allKeys = currentListItems.map(({ snippet, index, fromCollection }) =>
+            getItemKey(snippet, index, fromCollection)
+        );
+        const allSelected = allKeys.length > 0 && allKeys.every(key => selectedItems.has(key));
+        selectAllBtn.textContent = allSelected ? 'Deselect all' : 'Select all';
+    }
+}
+
+function toggleItemSelection(key) {
+    if (selectedItems.has(key)) selectedItems.delete(key);
+    else selectedItems.add(key);
+    updateHotbar();
+    // update just the checkbox visual without full re-render
+    const cb = document.querySelector(`[data-sel-key="${CSS.escape(key)}"]`);
+    if (cb) cb.checked = selectedItems.has(key);
+}
+
+function selectAllVisible() {
+    const allKeys = currentListItems.map(({ snippet, index, fromCollection }) =>
+        getItemKey(snippet, index, fromCollection)
+    );
+    const allSelected = allKeys.every(key => selectedItems.has(key));
+
+    if (allSelected) {
+        allKeys.forEach(key => selectedItems.delete(key));
+        document.querySelectorAll('.sel-checkbox').forEach(cb => { cb.checked = false; });
+    } else {
+        allKeys.forEach(key => selectedItems.add(key));
+        document.querySelectorAll('.sel-checkbox').forEach(cb => { cb.checked = true; });
+    }
+
+    updateHotbar();
+}
+
+function getSelectedItemObjects() {
+    // resolve selectedItems keys back to actual snippet objects
+    const result = [];
+    currentListItems.forEach(({ snippet, index, fromCollection }) => {
+        const key = getItemKey(snippet, index, fromCollection);
+        if (selectedItems.has(key)) result.push({ snippet, index, fromCollection, key });
+    });
+    return result;
+}
+
+function deleteSelected() {
+    if (selectedItems.size === 0) return;
+    if (!confirm(`Delete ${selectedItems.size} quote${selectedItems.size !== 1 ? 's' : ''}?`)) return;
+    const toDelete = getSelectedItemObjects();
+    chrome.storage.local.get(['saved_snippets', 'collections'], (result) => {
+        const savedSnippets = result.saved_snippets || [];
+        const collections = result.collections || {};
+        // group by collection to splice in reverse index order
+        const byCollection = {};
+        toDelete.forEach(({ index, fromCollection }) => {
+            const key = fromCollection === null ? '__main__' : fromCollection;
+            if (!byCollection[key]) byCollection[key] = [];
+            byCollection[key].push(index);
+        });
+        Object.entries(byCollection).forEach(([colKey, indices]) => {
+            indices.sort((a, b) => b - a); // splice in reverse so indices stay valid
+            if (colKey === '__main__') indices.forEach(i => savedSnippets.splice(i, 1));
+            else if (collections[colKey]) indices.forEach(i => collections[colKey].splice(i, 1));
+        });
+        chrome.storage.local.set({ saved_snippets: savedSnippets, collections }, () => {
+            selectedItems.clear();
+            exitSelectionMode();
+            loadAll();
+        });
+    });
+}
+
+function exportSelected() {
+    const items = getSelectedItemObjects();
+    if (items.length === 0) return;
+    const snippets = items.map(({ snippet }) => snippet);
+    const blob = new Blob([JSON.stringify({ saved_snippets: snippets }, null, 2)], { type: 'application/json' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `highlighter-export-${new Date().toISOString().slice(0, 10)}.db`;
+    document.body.appendChild(link);
+    link.click();
+    URL.revokeObjectURL(link.href);
+    document.body.removeChild(link);
+    exitSelectionMode();
+}
+
+function copySelected() {
+    const items = getSelectedItemObjects();
+    if (items.length === 0) return;
+    const text = items.map(({ snippet }) => {
+        const t = typeof snippet === 'object' ? snippet.text : String(snippet);
+        const title = typeof snippet === 'object' ? snippet.title : null;
+        const url = typeof snippet === 'object' ? snippet.url : null;
+        const savedAt = typeof snippet === 'object' ? snippet.savedAt : null;
+        const dateLabel = savedAt ? new Date(savedAt).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+        const lines = [`"${t}"`, title ? `Source: ${title}` : null, url ? `URL: ${url}` : null, dateLabel ? `Saved: ${dateLabel}` : null].filter(Boolean);
+        return lines.join('\n');
+    }).join('\n\n---\n\n');
+    copyTextToClipboard(text);
+    exitSelectionMode();
+}
+
+function openMoveModalForSelected() {
+    const items = getSelectedItemObjects();
+    if (items.length === 0) return;
+    // reuse pendingMove but store array; patch confirmMove to handle array
+    pendingMove = { bulk: items };
+    const modal = document.getElementById('move-modal');
+    const options = document.getElementById('move-modal-options');
+    options.innerHTML = '';
+    const destinations = Object.keys(allCollections).filter(name =>
+        !items.every(({ fromCollection }) => fromCollection === name)
+    );
+    if (destinations.length === 0) {
+        options.innerHTML = '<p class="empty-msg">No other destinations available.</p>';
+    } else {
+        destinations.forEach((label) => {
+            const btn = document.createElement('button');
+            btn.textContent = label;
+            btn.style.cssText = 'display:block;width:100%;padding:8px 10px;margin-bottom:6px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:4px;cursor:pointer;font-size:13px;text-align:left;';
+            btn.addEventListener('mouseover', () => btn.style.background = '#e9ecef');
+            btn.addEventListener('mouseout', () => btn.style.background = '#f8f9fa');
+            btn.addEventListener('click', () => confirmBulkMove(label));
+            options.appendChild(btn);
+        });
+    }
+    modal.style.display = 'flex';
+}
+
+function confirmBulkMove(destination) {
+    const { bulk } = pendingMove;
+    chrome.storage.local.get(['saved_snippets', 'collections'], (result) => {
+        const savedSnippets = result.saved_snippets || [];
+        const collections = result.collections || {};
+        if (!collections[destination]) collections[destination] = [];
+        // group by source, splice in reverse
+        const bySource = {};
+        bulk.forEach(({ snippet, index, fromCollection }) => {
+            const key = fromCollection === null ? '__main__' : fromCollection;
+            if (!bySource[key]) bySource[key] = [];
+            bySource[key].push({ index, snippet });
+        });
+        Object.entries(bySource).forEach(([srcKey, items]) => {
+            items.sort((a, b) => b.index - a.index);
+            items.forEach(({ index, snippet }) => {
+                if (srcKey === '__main__') savedSnippets.splice(index, 1);
+                else if (collections[srcKey]) collections[srcKey].splice(index, 1);
+                collections[destination].push(snippet);
+            });
+        });
+        chrome.storage.local.set({ saved_snippets: savedSnippets, collections }, () => {
+            closeMoveModal();
+            selectedItems.clear();
+            exitSelectionMode();
+            loadAll();
+        });
+    });
+}
+
 // --- UI initialization (attach DOM listeners safely) ---
 function initUI() {
     // Tab switching
@@ -255,6 +450,37 @@ function initUI() {
             currentListItems = [];
             currentPageMeta = null;
             updatePager();
+        });
+    }
+
+    // Delete collection button in collection detail view
+    const deleteCollectionBtn = document.getElementById('delete-collection-btn');
+    if (deleteCollectionBtn) {
+        deleteCollectionBtn.addEventListener('click', () => {
+            if (!currentPageMeta || currentPageMeta.type !== 'collection') return;
+            const collectionName = currentPageMeta.name;
+            if (confirm(`Delete collection "${collectionName}"? This will not delete the saved quotes.`)) {
+                chrome.storage.local.get(['collections'], (data) => {
+                    const collections = data.collections || {};
+                    delete collections[collectionName];
+                    chrome.storage.local.set({ collections }, () => {
+                        allCollections = collections;
+                        // Navigate back to collections view
+                        const collectionDetail = document.getElementById('collection-detail');
+                        const collectionsList = document.getElementById('collections-list');
+                        const toolbar = document.querySelector('.toolbar');
+                        if (collectionDetail) collectionDetail.style.display = 'none';
+                        if (toolbar) toolbar.style.display = 'flex';
+                        if (collectionsList) {
+                            collectionsList.style.display = 'grid';
+                        }
+                        currentPageType = 'none';
+                        currentListItems = [];
+                        currentPageMeta = null;
+                        renderCollections();
+                    });
+                });
+            }
         });
     }
 
@@ -432,6 +658,26 @@ function initUI() {
     if (quoteModal) quoteModal.addEventListener('click', (e) => {
         if (e.target === quoteModal) quoteModal.style.display = 'none';
     });
+
+    //select mode and bulk actions
+
+    const selectModeBtn = document.getElementById('select-mode-btn');
+    if (selectModeBtn) {
+        selectModeBtn.addEventListener('click', () => {
+            if (selectionMode) exitSelectionMode();
+            else enterSelectionMode();
+        });
+    }
+    const hotbarSelectAll = document.getElementById('hotbar-select-all');
+    if (hotbarSelectAll) hotbarSelectAll.addEventListener('click', selectAllVisible);
+    const hotbarDelete = document.getElementById('hotbar-delete');
+    if (hotbarDelete) hotbarDelete.addEventListener('click', deleteSelected);
+    const hotbarExport = document.getElementById('hotbar-export');
+    if (hotbarExport) hotbarExport.addEventListener('click', exportSelected);
+    const hotbarMove = document.getElementById('hotbar-move');
+    if (hotbarMove) hotbarMove.addEventListener('click', openMoveModalForSelected);
+    const hotbarCopy = document.getElementById('hotbar-copy');
+    if (hotbarCopy) hotbarCopy.addEventListener('click', copySelected);
 }
 
 // --- All Quotes page ---
@@ -688,6 +934,8 @@ function openMoveModal(snippet, index, fromCollection) {
 }
 
 function confirmMove(destination) {
+    if (pendingMove?.bulk) { confirmBulkMove(destination); return; }
+
     const { snippet, index, fromCollection } = pendingMove;
 
     chrome.storage.local.get(['saved_snippets', 'collections'], (result) => {
@@ -726,6 +974,7 @@ function deleteSnippet(index, fromCollection) {
 }
 
 function makeSnippetCard(snippet, index, fromCollection, allowLink = true, hideTitle = false) {
+    const key = getItemKey(snippet, index, fromCollection);
     const snippetText = typeof snippet === 'object' ? snippet.text : snippet;
     const snippetUrl = typeof snippet === 'object' ? snippet.url : null;
     const snippetTitle = typeof snippet === 'object' ? snippet.title : null;
@@ -771,6 +1020,25 @@ function makeSnippetCard(snippet, index, fromCollection, allowLink = true, hideT
     }
 
     card.appendChild(body);
+
+    if (selectionMode) {
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'sel-checkbox';
+        cb.dataset.selKey = key;
+        cb.checked = selectedItems.has(key);
+        cb.style.cssText = 'position:absolute;left:10px;top:50%;transform:translateY(-50%);width:16px;height:16px;accent-color:#c21b1b;cursor:pointer;';
+        cb.addEventListener('change', (e) => { e.stopPropagation(); toggleItemSelection(key); });
+        card.style.paddingLeft = '36px';
+        card.style.position = 'relative';
+        card.appendChild(cb);
+        // make whole card body toggle checkbox
+        body.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleItemSelection(key);
+            cb.checked = selectedItems.has(key);
+        });
+    }
 
     // Icon actions (folder/move and trash/delete) in upper-right
     const actions = document.createElement('div');

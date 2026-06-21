@@ -15,7 +15,7 @@
             flex-direction: column;
             overflow: hidden;
             color: #111;
-            padding: 12px;
+            padding: 12px 12px 12px 12px;
         }
 
         /* --- Tab Bar --- */
@@ -302,6 +302,7 @@
             gap: 4px;
             min-width: 90px;
         }
+    
         .move-select {
             font-size: 11px;
             padding: 2px;
@@ -351,6 +352,9 @@
             bottom: 8px;
             right: 8px;
             top: auto;
+            display: flex;
+            gap: 6px;
+            align-items: center;
         }
         .collection-card .chev { color: currentColor; }
         .collection-card .meta {
@@ -436,6 +440,7 @@
         <div class="tab" data-tab="by-site">Page View</div>
         <div class="tab" data-tab="collections">Collections View</div>
         <input id="search-input" class="search-input" type="search" placeholder="Search..." aria-label="Search quotes" />
+        <button id="select-mode-btn" class="settings-btn" title="Select quotes" style="font-size:13px; font-weight:500; min-width:64px; padding:0 10px;">Select</button>
         <button id="settings-btn" class="settings-btn" title="Settings">⚙</button>
     </div>
 
@@ -478,7 +483,12 @@
             <!-- Collection Detail (hidden until a collection is clicked) -->
             <div id="collection-detail" style="display:none; flex-direction:column; height:100%;">
                 <button id="back-btn">← Back</button>
-                <div id="collection-detail-title"></div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <div id="collection-detail-title"></div>
+                    <button id="delete-collection-btn" class="icon-btn" title="Delete collection" style="width:22px; height:22px; padding:2px; display:flex; align-items:center; justify-content:center;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
+                </div>
                 <div id="collection-detail-list"></div>
             </div>
         </div>
@@ -545,6 +555,16 @@
             <div id="move-modal-options"></div>
             <button id="move-modal-cancel" style="margin-top:12px; width:100%; padding:7px; background:#e9ecef; border:none; border-radius:4px; cursor:pointer; font-size:13px;">Cancel</button>
         </div>
+    </div>
+
+    <!-- Selection Hotbar -->
+    <div id="selection-hotbar" style="display:none; position:fixed; bottom:0; left:0; right:0; background:#1a1a1a; padding:10px 14px; z-index:1100; align-items:center; gap:8px; border-top:none;">
+        <span id="hotbar-count" style="color:#fff; font-size:13px; font-weight:500; flex:1; font-family:Arial,sans-serif;">0 selected</span>
+        <button id="hotbar-select-all" style="background:rgba(255,255,255,0.13); color:#fff; border:none; border-radius:8px; padding:7px 12px; font-size:12px; cursor:pointer; font-family:Arial,sans-serif;">Select all</button>
+        <button id="hotbar-move" style="background:rgba(255,255,255,0.13); color:#fff; border:none; border-radius:8px; padding:7px 12px; font-size:12px; cursor:pointer; font-family:Arial,sans-serif;">Move</button>
+        <button id="hotbar-export" style="background:rgba(255,255,255,0.13); color:#fff; border:none; border-radius:8px; padding:7px 12px; font-size:12px; cursor:pointer; font-family:Arial,sans-serif;">Export</button>
+        <button id="hotbar-copy" style="background:rgba(255,255,255,0.13); color:#fff; border:none; border-radius:8px; padding:7px 12px; font-size:12px; cursor:pointer; font-family:Arial,sans-serif;">Copy</button>
+        <button id="hotbar-delete" style="background:rgba(200,30,30,0.7); color:#fff; border:none; border-radius:8px; padding:7px 12px; font-size:12px; cursor:pointer; font-family:Arial,sans-serif;">Delete</button>
     </div>
 
     <script src="popup.js"></script>

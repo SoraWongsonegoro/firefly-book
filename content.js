@@ -1,3 +1,5 @@
+console.log('content.js loaded');
+
 const popupBtn = document.createElement('button');
 popupBtn.className = 'ts-ext-save-btn';
 popupBtn.setAttribute('aria-label', 'Save highlight');
@@ -136,6 +138,50 @@ document.addEventListener('mousedown', (e) => {
     }
 });
 
+document.addEventListener('keydown', (e) => {
+
+    console.log('keydown:', e.key, 'ctrl:', e.ctrlKey, 'shift:', e.shiftKey);
+
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 's') {
+        const selection = window.getSelection();
+        const selectedText = selection?.toString().trim();
+        if (!selectedText) return;
+
+        e.preventDefault();
+
+        const range = selection.getRangeAt(0);
+        highlightRange(range);
+        selection.removeAllRanges();
+        popupBtn.style.display = 'none';
+        pendingRange = null;
+
+        if (!isExtensionValid()) return;
+
+        try {
+            chrome.storage.local.get(['saved_snippets'], (result) => {
+                if (chrome.runtime.lastError) {
+                    console.warn('Storage error:', chrome.runtime.lastError.message);
+                    return;
+                }
+                const snippets = result.saved_snippets || [];
+                snippets.push({
+                    text: selectedText,
+                    title: document.title || 'Untitled Page',
+                    url: window.location.href,
+                    savedAt: new Date().toISOString()
+                });
+                chrome.storage.local.set({ saved_snippets: snippets }, () => {
+                    if (chrome.runtime.lastError) {
+                        console.warn('Storage error:', chrome.runtime.lastError.message);
+                    }
+                });
+            });
+        } catch (err) {
+            console.warn('Extension context lost during save:', err.message);
+        }
+    }
+}, true);
+
 popupBtn.addEventListener('click', () => {
     if (!pendingRange) return;
     if (!isExtensionValid()) {
@@ -179,4 +225,7 @@ popupBtn.addEventListener('click', () => {
         console.warn('Extension context lost during save:', e.message);
         popupBtn.remove();
     }
-});
+}
+
+
+);
