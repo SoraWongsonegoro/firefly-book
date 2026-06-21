@@ -821,7 +821,8 @@ function openPageDetail(url, title, items) {
     titleLink.textContent = `${items.length} Highlights in ${title}`;
     // make page title link less prominent (unbolded); CSS handles hover color
     titleLink.style.color = '#111';
-    titleLink.style.fontWeight = '400';
+    titleLink.style.fontWeight = '700';
+    titleLink.style.font = 'Arial, sans-serif';
     detailTitle.appendChild(titleLink);
 
     renderPageDetailList(paginateItems(items));
