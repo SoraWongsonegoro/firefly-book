@@ -215,6 +215,27 @@ function getItemKey(snippet, index, fromCollection) {
     return fromCollection ? `col:${fromCollection}:${index}` : `snip:${index}`;
 }
 
+// Identity signature for a snippet (ignores annotation/index so the same quote
+// matches across the main list and any collections it has been added to).
+function snippetSignature(snippet) {
+    const o = typeof snippet === 'object' && snippet ? snippet : { text: String(snippet) };
+    return JSON.stringify([o.text || '', o.url || '', o.savedAt || '']);
+}
+
+// Collapse the same quote (now possibly in several collections) to one entry.
+// Prefer the main-list copy so card actions act on the original location.
+function dedupeBySignature(items) {
+    const seen = new Map();
+    items.forEach((item) => {
+        const sig = snippetSignature(item.snippet);
+        const existing = seen.get(sig);
+        if (!existing || (existing.fromCollection !== null && item.fromCollection === null)) {
+            seen.set(sig, item);
+        }
+    });
+    return Array.from(seen.values());
+}
+
 function enterSelectionMode() {
     selectionMode = true;
     selectedItems.clear();
@@ -369,6 +390,10 @@ function openMoveModalForSelected() {
     pendingMove = { bulk: items };
     const modal = document.getElementById('move-modal');
     const options = document.getElementById('move-modal-options');
+    const title = document.getElementById('move-modal-title');
+    const cancel = document.getElementById('move-modal-cancel');
+    if (title) title.textContent = 'Move to collection';
+    if (cancel) cancel.textContent = 'Cancel';
     options.innerHTML = '';
     const destinations = Object.keys(allCollections).filter(name =>
         !items.every(({ fromCollection }) => fromCollection === name)
@@ -690,6 +715,24 @@ function initUI() {
         if (e.target === quoteModal) quoteModal.style.display = 'none';
     });
 
+    // Annotation field
+    const annotationAdd = document.getElementById('quote-modal-annotation-add');
+    if (annotationAdd) annotationAdd.addEventListener('click', showAnnotationEditor);
+    const annotationDisplay = document.getElementById('quote-modal-annotation-display');
+    if (annotationDisplay) annotationDisplay.addEventListener('click', showAnnotationEditor);
+    const annotationInput = document.getElementById('quote-modal-annotation-input');
+    if (annotationInput) {
+        // Enter saves; Shift+Enter inserts a newline.
+        annotationInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                commitAnnotation();
+            }
+        });
+        // Save on blur so a note isn't lost if focus leaves the field.
+        annotationInput.addEventListener('blur', commitAnnotation);
+    }
+
     //select mode and bulk actions
 
     const selectModeBtn = document.getElementById('select-mode-btn');
@@ -755,12 +798,12 @@ function renderAllQuotes() {
     container.innerHTML = '';
     const collectionNames = Object.keys(allCollections);
 
-    const allQuotes = [
+    const allQuotes = dedupeBySignature([
         ...allSnippets.map((snippet, index) => ({ snippet, index, fromCollection: null })),
         ...collectionNames.flatMap(name =>
             allCollections[name].map((snippet, index) => ({ snippet, index, fromCollection: name }))
         )
-    ];
+    ]);
 
     const filteredQuotes = allQuotes.filter((item) => quoteMatchesQuery(item.snippet, normalizeQuery(searchQuery)));
     const sortedQuotes = sortQuoteItems(filteredQuotes);
@@ -791,12 +834,12 @@ function renderBySite() {
 
     // Build list of pages (grouped by URL/title)
     const collectionNames = Object.keys(allCollections);
-    const allQuotes = [
+    const allQuotes = dedupeBySignature([
         ...allSnippets.map((snippet, index) => ({ snippet, index, fromCollection: null })),
         ...collectionNames.flatMap(name =>
             allCollections[name].map((snippet, index) => ({ snippet, index, fromCollection: name }))
         )
-    ];
+    ]);
 
     currentPageType = 'none';
     currentListItems = [];
@@ -972,56 +1015,73 @@ function openMoveModal(snippet, index, fromCollection) {
 
     const modal = document.getElementById('move-modal');
     const options = document.getElementById('move-modal-options');
+    const title = document.getElementById('move-modal-title');
+    const cancel = document.getElementById('move-modal-cancel');
     options.innerHTML = '';
 
-    // Build destination list
-    const destinations = [];
+    if (title) title.textContent = 'Add to collections';
+    if (cancel) cancel.textContent = 'Done';
 
-    // All collections except the one it's already in
-    Object.keys(allCollections).forEach((name) => {
-        if (name !== fromCollection) {
-            destinations.push({ label: name, value: name });
-        }
-    });
-
-    if (destinations.length === 0) {
-        options.innerHTML = '<p class="empty-msg">No other destinations available.</p>';
+    const names = Object.keys(allCollections);
+    if (names.length === 0) {
+        options.innerHTML = '<p class="empty-msg">No collections yet.</p>';
     } else {
-        destinations.forEach(({ label, value }) => {
+        names.forEach((name) => {
             const btn = document.createElement('button');
-            btn.textContent = label;
-            btn.style.cssText = 'display:block; width:100%; padding:8px 10px; margin-bottom:6px; background:#f8f9fa; border:1px solid #dee2e6; border-radius:4px; cursor:pointer; font-size:13px; text-align:left;';
-            btn.addEventListener('mouseover', () => btn.style.background = '#e9ecef');
-            btn.addEventListener('mouseout', () => btn.style.background = '#f8f9fa');
-            btn.addEventListener('click', () => confirmMove(value));
+            btn.textContent = name;
+            btn.dataset.collection = name;
+            btn.style.cssText = 'display:block; width:100%; padding:8px 10px; margin-bottom:6px; border-radius:4px; cursor:pointer; font-size:13px; text-align:left;';
+            btn.addEventListener('click', () => toggleCollectionMembership(name));
             options.appendChild(btn);
         });
+        styleMoveModalButtons();
     }
 
     modal.style.display = 'flex';
 }
 
-function confirmMove(destination) {
-    if (pendingMove?.bulk) { confirmBulkMove(destination); return; }
-
-    const { snippet, index, fromCollection } = pendingMove;
-
-    chrome.storage.local.get(['saved_snippets', 'collections'], (result) => {
-        const savedSnippets = result.saved_snippets || [];
-        const collections = result.collections || {};
-
-        if (fromCollection === null) {
-            savedSnippets.splice(index, 1);
-        } else if (collections[fromCollection]) {
-            collections[fromCollection].splice(index, 1);
+// Paint each collection button: red when the current quote is a member, plain otherwise.
+function styleMoveModalButtons() {
+    if (!pendingMove) return;
+    const sig = snippetSignature(pendingMove.snippet);
+    document.querySelectorAll('#move-modal-options button[data-collection]').forEach((btn) => {
+        const name = btn.dataset.collection;
+        const members = allCollections[name] || [];
+        const selected = members.some((s) => snippetSignature(s) === sig);
+        if (selected) {
+            btn.style.background = '#c21b1b';
+            btn.style.color = '#fff';
+            btn.style.border = '1px solid #c21b1b';
+            btn.style.fontWeight = '600';
+        } else {
+            btn.style.background = '#f8f9fa';
+            btn.style.color = '#333';
+            btn.style.border = '1px solid #dee2e6';
+            btn.style.fontWeight = '400';
         }
+    });
+}
 
-        if (!collections[destination]) collections[destination] = [];
-        collections[destination].push(snippet);
-
-        chrome.storage.local.set({ saved_snippets: savedSnippets, collections }, () => {
-            closeMoveModal();
-            loadAll();
+// Add the quote to a collection if absent, remove it if present. Applies instantly.
+function toggleCollectionMembership(name) {
+    if (!pendingMove) return;
+    const sig = snippetSignature(pendingMove.snippet);
+    chrome.storage.local.get(['collections'], (result) => {
+        const collections = result.collections || {};
+        if (!collections[name]) collections[name] = [];
+        const idx = collections[name].findIndex((s) => snippetSignature(s) === sig);
+        if (idx >= 0) {
+            collections[name].splice(idx, 1);
+        } else {
+            const copy = typeof pendingMove.snippet === 'object'
+                ? { ...pendingMove.snippet }
+                : { text: String(pendingMove.snippet) };
+            collections[name].push(copy);
+        }
+        chrome.storage.local.set({ collections }, () => {
+            allCollections = collections;
+            styleMoveModalButtons();
+            renderCurrentTab();
         });
     });
 }
@@ -1495,7 +1555,76 @@ function openQuoteModal(snippet) {
         }
     }
 
+    setupQuoteModalAnnotation(snippet);
+
     document.getElementById('quote-modal').style.display = 'flex';
+}
+
+// --- Annotation (quote modal note field) ---
+
+function setupQuoteModalAnnotation(snippet) {
+    const display = document.getElementById('quote-modal-annotation-display');
+    const addBtn = document.getElementById('quote-modal-annotation-add');
+    const input = document.getElementById('quote-modal-annotation-input');
+    if (!display || !addBtn || !input) return;
+
+    const isObject = typeof snippet === 'object' && snippet;
+    const note = isObject ? (snippet.annotation || '') : '';
+
+    input.style.display = 'none';
+    input.value = note;
+
+    if (note) {
+        display.textContent = note;
+        display.style.display = 'block';
+        addBtn.style.display = 'none';
+    } else {
+        display.style.display = 'none';
+        addBtn.style.display = 'inline-flex';
+    }
+}
+
+function showAnnotationEditor() {
+    const display = document.getElementById('quote-modal-annotation-display');
+    const addBtn = document.getElementById('quote-modal-annotation-add');
+    const input = document.getElementById('quote-modal-annotation-input');
+    if (!input) return;
+    display.style.display = 'none';
+    addBtn.style.display = 'none';
+    input.style.display = 'block';
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+}
+
+function commitAnnotation() {
+    const input = document.getElementById('quote-modal-annotation-input');
+    if (!input || input.style.display === 'none') return;
+    const text = input.value.trim();
+    saveAnnotation(text);
+    setupQuoteModalAnnotation(currentQuoteModalSnippet);
+}
+
+// Persist the annotation onto every copy of this quote (main list + collections).
+function saveAnnotation(text) {
+    const snippet = currentQuoteModalSnippet;
+    if (typeof snippet !== 'object' || !snippet) return;
+    const sig = snippetSignature(snippet);
+    snippet.annotation = text;
+
+    chrome.storage.local.get(['saved_snippets', 'collections'], (result) => {
+        const savedSnippets = result.saved_snippets || [];
+        const collections = result.collections || {};
+        const apply = (s) => {
+            if (typeof s === 'object' && s && snippetSignature(s) === sig) s.annotation = text;
+        };
+        savedSnippets.forEach(apply);
+        Object.values(collections).forEach((arr) => arr.forEach(apply));
+        chrome.storage.local.set({ saved_snippets: savedSnippets, collections }, () => {
+            allSnippets = savedSnippets;
+            allCollections = collections;
+            renderCurrentTab();
+        });
+    });
 }
 
 // --- Drag scroll ---
