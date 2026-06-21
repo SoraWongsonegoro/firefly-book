@@ -12,21 +12,6 @@ h3 {
     color: #333;
 }
 
-#clear-btn {
-    width: 100%;
-    padding: 8px;
-    background: #dc3545;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    margin-bottom: 10px;
-}
-
-#clear-btn:hover {
-    background: #c82333;
-}
-
 ul {
     list-style: none;
     padding: 0;

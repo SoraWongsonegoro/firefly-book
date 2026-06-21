@@ -1,6 +1,12 @@
 const popupBtn = document.createElement('button');
-popupBtn.textContent = 'Save';
 popupBtn.className = 'ts-ext-save-btn';
+popupBtn.setAttribute('aria-label', 'Save highlight');
+popupBtn.innerHTML = `
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+`;
 document.body.appendChild(popupBtn);
 
 let pendingRange = null;
